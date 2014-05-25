@@ -28,6 +28,7 @@ from sqlalchemy.orm import synonym
 
 from bookie.models import Base
 from bookie.models import DBSession
+from bookie.models.social import TwitterConnection
 
 
 LOG = logging.getLogger(__name__)
@@ -269,6 +270,11 @@ class User(Base):
     api_key = Column(Unicode(12))
     invite_ct = Column(Integer, default=0)
     invited_by = Column('invited_by', Unicode(255))
+
+    # 3rd party social connections
+    TwitterConnection = relation(TwitterConnection,
+                                 backref="user")
+
 
     activation = relation(
         Activation,
