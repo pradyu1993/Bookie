@@ -1,4 +1,6 @@
 from __future__ import absolute_import
+
+import tweepy
 from celery.utils.log import get_task_logger
 
 from bookie.bcelery.celery import celery
@@ -18,6 +20,7 @@ from bookie.models import Bmark
 from bookie.models import BmarkMgr
 from bookie.models import Readable
 from bookie.models.auth import UserMgr
+from bookie.models.social import SocialMgr
 from bookie.models.stats import StatBookmarkMgr
 from bookie.models.queue import ImportQueueMgr
 
@@ -50,10 +53,12 @@ def daily_stats():
 
     Currently we're monitoring:
     - Total number of bookmarks for each user in the system
-
+    - Delete's inactive accounts if any
+    - Refresh's Twitter fetch from user's accounts
     """
     count_total_each_user.delay()
     delete_non_activated_account.delay()
+    refresh_twitter_fetch.delay()
 
 
 @celery.task(ignore_result=True)
@@ -269,6 +274,21 @@ def fulltext_index_bookmark(bid, content):
 
 
 @celery.task(ignore_result=True)
+def refresh_twitter_fetch(username=None):
+    oauth_token = INI.get('twitter_consumer_key')
+    oauth_verifier = INI.get('twitter_consumer_secret')
+    for connection in SocialMgr.get_twitter_connections(username):
+        try:
+            auth = tweepy.OAuthHandler(oauth_token, oauth_verifier)
+            auth.set_access_token(
+                connection.access_key, connection.access_secret)
+            twitter_user = tweepy.API(auth)
+            fetch_tweets(twitter_user, connection)
+        except (tweepy.TweepError, IOError):
+            logger.error('Twitter connection denied tweepy IOError')
+
+
+@celery.task(ignore_result=True)
 def reindex_fulltext_allbookmarks(sync=False):
     """Rebuild the fulltext index with all bookmarks."""
     logger.debug("Starting freshen of fulltext index.")
@@ -357,3 +377,16 @@ def fetch_bmark_content(bid):
             'No readable record '
             'during existing processing')
         trans.commit()
+
+
+@celery.task(ignore_result=True)
+def fetch_tweets(twitter_user, connection):
+    tweets = twitter_user.user_timeline(
+        id=connection.twitter_username,
+        include_entities=True,
+        since_id=connection.last_tweet_id)
+    SocialMgr.update_lasttweet_data(connection, tweets[0].id)
+    for tweet in tweets:
+        for url in tweet.entities['urls']:
+            BmarkMgr.store(
+                url['expanded_url'], connection.username, '', '', '')

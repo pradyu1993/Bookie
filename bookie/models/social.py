@@ -9,6 +9,7 @@ from sqlalchemy import (
     Boolean)
 
 from bookie.models import Base
+from bookie.models import DBSession
 
 twitter_connection = 'TwitterConnection'
 
@@ -20,6 +21,22 @@ class SocialMgr(object):
         connections = BaseConnection.query.filter(
             BaseConnection.username == username)
         return connections
+
+    @staticmethod
+    def get_twitter_connections(username=None):
+        """ Returns all twitter connections based on username """
+        if username:
+            connections = TwitterConnection.query.filter(
+                TwitterConnection.username == username).all()
+        else:
+            connections = TwitterConnection.query.all()
+        return connections
+
+    @staticmethod
+    def update_lasttweet_data(connection, tweet_id):
+        connection.last_tweet_id = tweet_id
+        connection.refresh_date = datetime.now()
+        DBSession.add(connection)
 
 
 class BaseConnection(Base):
@@ -51,6 +68,7 @@ class TwitterConnection(BaseConnection):
     access_secret = Column(Unicode(255))
     twitter_username = Column(Unicode(255))
     refresh_date = Column(DateTime)
+    last_tweet_id = Column(Unicode(255))
 
     __mapper_args__ = {
         'polymorphic_identity': twitter_connection

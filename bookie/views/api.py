@@ -1075,6 +1075,19 @@ def import_reset(request):
     return _api_response(request, ret)
 
 
+@view_config(route_name="api_admin_twitter_refresh", renderer="jsonp")
+@api_auth('api_key', UserMgr.get, admin_only=True)
+def twitter_refresh(request):
+    """Update tweets fetched from user account """
+    mdict = request.matchdict
+    username = mdict.get('username', None)
+    tasks.refresh_twitter_fetch(username)
+    ret = {
+        'message': "running bot to fetch user's tweets"
+    }
+    return _api_response(request, ret)
+
+
 @view_config(route_name="api_admin_users_list", renderer="jsonp")
 @api_auth('api_key', UserMgr.get, admin_only=True)
 def user_list(request):
